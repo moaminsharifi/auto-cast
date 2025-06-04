@@ -14,83 +14,48 @@
       "audio": "Generate Audio"
     }
   },
-  "settings": {
-    "title": "Settings",
-    "description": "Configure your preferences, API key, and script generation model.",
-    "theme": {
-      "title": "Theme Preference",
-      "description": "Choose your preferred theme. Auto follows your system preference.",
-      "light": "Light",
-      "dark": "Dark",
-      "auto": "Auto"
-    },
-    "language": {
-      "title": "Interface Language",
-      "description": "Choose your preferred interface language and layout direction.",
-      "english": "English",
-      "persian": "Persian (فارسی)"
-    },
-    "apiKey": {
-      "title": "OpenAI API Key",
-      "placeholder": "Enter your OpenAI API Key",
-      "save": "Save API Key in browser",
-      "saved": "API Key is saved and loaded from browser storage.",
-      "edit": "Edit Key",
-      "clear": "Clear"
-    },
-    "model": {
-      "title": "Script Generation Model",
-      "description": "Choose the OpenAI model for generating podcast scripts. More advanced models may produce better results."
-    },
-    "advanced": {
-      "title": "Advanced Options",
-      "description": "Configure advanced AI parameters and system prompts for fine-tuned control.",
-      "show": "Show",
-      "hide": "Hide",
-      "systemPrompt": {
-        "title": "System Prompt Template",
-        "custom": "Custom System Prompt",
-        "customPlaceholder": "Enter your custom system prompt here...",
-        "customDescription": "Define how the AI should behave and what style it should use for generating podcast scripts."
-      },
-      "temperature": {
-        "title": "Temperature",
-        "description": "Controls randomness: lower values for more focused output, higher values for more creative output.",
-        "conservative": "Conservative (0)",
-        "balanced": "Balanced (1)",
-        "creative": "Creative (2)"
-      },
-      "maxTokens": {
-        "title": "Max Tokens",
-        "description": "Maximum number of tokens for script generation (100-4000). Higher values allow longer scripts."
-      }
-    },
-    "save": "Save Settings"
+  "common": {
+    "error": "Error",
+    "generating": "Generating...",
+    "readingFiles": "Reading files...",
+    "summarizing": "Summarizing content from multiple files...",
+    "generatingScript": "Generating initial script...",
+    "refining": "Refining script...",
+    "synthesizing": "Synthesizing audio...",
+    "tags": {
+      "aiScript": "AI Script Generation",
+      "voiceSynthesis": "Professional Voice Synthesis",
+      "multiLanguage": "Multi-Language Support",
+      "privacy": "Privacy-First Design"
+    }
   },
   "step1": {
     "title": "Your Text Content",
     "placeholder": "Paste your text here or upload files below to get started with AI podcast generation",
     "language": "Podcast Language",
+    "next": "Next: Configure Structure",
     "upload": {
       "title": "Drag & drop your files here",
       "titleDrop": "Drop your files here",
       "description": "Supports .txt and .md files only • Multiple files supported",
       "browse": "Browse files",
-      "addMore": "Add more",
-      "clearAll": "Clear all files",
       "or": "OR",
       "filesUploaded": "{count} file uploaded",
       "filesUploadedPlural": "{count} files uploaded",
       "totalSize": "Total size: {size}",
+      "clearAll": "Clear all files",
+      "addMore": "Add more",
       "summarize": "Summarize content before creating script",
       "summarizeDescription": "Recommended for multiple files to create a cohesive podcast script"
-    },
-    "next": "Next: Configure Structure"
+    }
   },
   "step2": {
     "title": "Podcast Structure Framework",
     "description": "Select points to emphasize in your podcast script and provide specific details for each.",
+    "back": "Back",
+    "generate": "Generate Script",
     "framework": {
+      "detailsLabel": "Specific details for this aspect:",
       "purpose": {
         "title": "Define Your Purpose & Audience",
         "description": "Decide on the podcast's core message, niche, or theme. Identify who your target listeners are and what value you're providing them.",
@@ -120,19 +85,18 @@
         "title": "Consistent Schedule & Continuous Improvement",
         "description": "Establish a regular release schedule to build listener trust. Gather feedback, track analytics, and refine your content and delivery over time.",
         "placeholder": "e.g., 'Weekly episodes, mention next episode topic, ask for listener suggestions'"
-      },
-      "detailsLabel": "Specific details for this aspect:"
+      }
     },
     "additionalNotes": {
       "title": "Additional Structuring Notes (Optional)",
       "placeholder": "e.g., 'Emphasize storytelling for the main content', 'Keep the intro under 30 seconds'"
-    },
-    "back": "Back",
-    "generate": "Generate Script"
+    }
   },
   "step3": {
     "title": "Review Generated Script",
     "placeholder": "Your generated script will appear here...",
+    "back": "Back",
+    "generateAudio": "Looks Good, Generate Audio",
     "refinement": {
       "title": "Refinement Prompt (Optional)",
       "placeholder": "e.g., 'Make it more conversational', 'Add a joke here', 'Explain X in simpler terms'",
@@ -149,15 +113,110 @@
         "title": "TTS Voice",
         "description": "Choose a voice that matches your podcast's tone and style."
       }
-    },
-    "back": "Back",
-    "generateAudio": "Looks Good, Generate Audio"
+    }
   },
   "step4": {
     "title": "Podcast Audio",
     "download": "Download MP3",
     "startOver": "Start Over",
     "backToScript": "Back to Script"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Configure your preferences, API key, and script generation model.",
+    "save": "Save Settings",
+    "language": {
+      "title": "Interface Language",
+      "english": "English",
+      "persian": "فارسی",
+      "description": "Choose your preferred interface language. Changes take effect immediately."
+    },
+    "theme": {
+      "title": "Theme Preference",
+      "light": "Light",
+      "dark": "Dark",
+      "auto": "Auto",
+      "description": "Choose your preferred theme. Auto follows your system preference."
+    },
+    "apiKey": {
+      "title": "OpenAI API Key",
+      "placeholder": "Enter your OpenAI API Key",
+      "save": "Save API Key in browser",
+      "saved": "API Key is saved and loaded from browser storage.",
+      "edit": "Edit Key",
+      "clear": "Clear"
+    },
+    "model": {
+      "title": "Script Generation Model",
+      "description": "Choose the OpenAI model for generating podcast scripts. More advanced models may produce better results."
+    },
+    "advanced": {
+      "title": "Advanced Options",
+      "show": "Show",
+      "hide": "Hide",
+      "description": "Configure advanced AI parameters and system prompts for fine-tuned control.",
+      "systemPrompt": {
+        "title": "System Prompt Template",
+        "custom": "Custom System Prompt",
+        "customPlaceholder": "Enter your custom system prompt here...",
+        "customDescription": "Define how the AI should behave and what style it should use for generating podcast scripts."
+      },
+      "temperature": {
+        "title": "Temperature",
+        "conservative": "Conservative (0)",
+        "balanced": "Balanced (1)",
+        "creative": "Creative (2)",
+        "description": "Controls randomness: lower values for more focused output, higher values for more creative output."
+      },
+      "maxTokens": {
+        "title": "Max Tokens",
+        "description": "Maximum number of tokens for script generation (100-4000). Higher values allow longer scripts."
+      }
+    }
+  },
+  "systemPrompts": {
+    "default": {
+      "name": "Default",
+      "description": "Balanced approach for general podcast content",
+      "prompt": "You are an expert podcast scriptwriter. Create engaging, conversational content that flows naturally and keeps listeners interested."
+    },
+    "educational": {
+      "name": "Educational",
+      "description": "Focus on clear explanations and learning outcomes",
+      "prompt": "You are an educational content expert. Break down complex topics into digestible segments, use analogies and examples, and ensure key concepts are clearly explained for learners."
+    },
+    "storytelling": {
+      "name": "Storytelling",
+      "description": "Narrative-driven approach with compelling stories",
+      "prompt": "You are a master storyteller. Weave compelling narratives, use vivid descriptions, create emotional connections, and structure content like an engaging story with clear beginning, middle, and end."
+    },
+    "conversational": {
+      "name": "Conversational",
+      "description": "Casual, friendly tone like talking to a friend",
+      "prompt": "You are a friendly conversationalist. Write in a casual, approachable tone as if talking to a close friend. Use everyday language, personal anecdotes, and create an intimate listening experience."
+    },
+    "professional": {
+      "name": "Professional",
+      "description": "Authoritative and credible business content",
+      "prompt": "You are a business communication expert. Maintain a professional, authoritative tone while being accessible. Focus on credibility, data-driven insights, and actionable business advice."
+    },
+    "custom": {
+      "name": "Custom",
+      "description": "Define your own system prompt",
+      "prompt": ""
+    }
+  },
+  "models": {
+    "standard": "Standard Quality",
+    "hd": "HD Quality"
+  },
+  "voices": {
+    "alloy": "Neutral, balanced voice with clear articulation",
+    "echo": "Male voice with deep, resonant tone and clear delivery",
+    "fable": "Female voice with soft, warm, and engaging qualities",
+    "onyx": "Male voice with authoritative, deep, and professional tone",
+    "nova": "Female voice with energetic, professional, and confident delivery",
+    "shimmer": "Female voice with conversational, friendly, and approachable style"
   },
   "features": {
     "title": "Why Choose AutoCast?",
@@ -178,72 +237,14 @@
       "description": "Transform hours of writing and recording into a simple 4-step process."
     }
   },
-  "voices": {
-    "alloy": "Neutral, balanced voice with clear articulation",
-    "echo": "Male voice with deep, resonant tone and clear delivery",
-    "fable": "Female voice with soft, warm, and engaging qualities",
-    "onyx": "Male voice with authoritative, deep, and professional tone",
-    "nova": "Female voice with energetic, professional, and confident delivery",
-    "shimmer": "Female voice with conversational, friendly, and approachable style"
-  },
-  "models": {
-    "standard": "Standard Quality",
-    "standardDesc": "Good quality voice with lower API usage",
-    "hd": "HD Quality",
-    "hdDesc": "Higher fidelity voice with more natural intonation"
-  },
-  "systemPrompts": {
-    "default": {
-      "name": "Default",
-      "description": "Balanced approach for general podcast content"
-    },
-    "educational": {
-      "name": "Educational",
-      "description": "Focus on clear explanations and learning outcomes"
-    },
-    "storytelling": {
-      "name": "Storytelling",
-      "description": "Narrative-driven approach with compelling stories"
-    },
-    "conversational": {
-      "name": "Conversational",
-      "description": "Casual, friendly tone like talking to a friend"
-    },
-    "professional": {
-      "name": "Professional",
-      "description": "Authoritative and credible business content"
-    },
-    "custom": {
-      "name": "Custom",
-      "description": "Define your own system prompt"
-    }
-  },
-  "common": {
-    "loading": "Loading...",
-    "generating": "Generating...",
-    "refining": "Refining...",
-    "synthesizing": "Synthesizing audio...",
-    "error": "Error",
-    "playSample": "Play sample",
-    "stopSample": "Stop",
-    "readingFiles": "Reading files...",
-    "summarizing": "Summarizing content from multiple files...",
-    "generatingScript": "Generating initial script...",
-    "tags": {
-      "aiScript": "AI-Powered Script Generation",
-      "voiceSynthesis": "Professional Voice Synthesis",
-      "multiLanguage": "Multi-Language Support",
-      "privacy": "Privacy-First Design"
-    }
-  },
   "errors": {
     "apiKeyRequired": "Please configure your OpenAI API key in settings.",
     "textRequired": "Please enter some text to generate a podcast from.",
     "invalidApiKey": "Invalid OpenAI API Key. Please check your key in settings.",
     "missingFields": "Missing API key, existing script, or refinement prompt.",
     "audioGeneration": "Missing API key or script for audio generation.",
+    "readError": "Failed to read {name}",
     "unsupportedFile": "Unsupported file type: {type} ({name}). Please upload .txt or .md files only.",
-    "noFiles": "No files could be processed successfully.",
-    "readError": "Failed to read {name}"
+    "noFiles": "No files could be processed successfully."
   }
 }
