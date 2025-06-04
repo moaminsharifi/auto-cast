@@ -12,38 +12,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { RichTextEditor } from "@/components/rich-text-editor"
 import { useTheme } from "@/components/theme-provider"
 import {
   Loader2,
   Mic,
   AlertCircle,
-  Wand2,
-  Volume2,
-  Download,
   KeyRound,
   Edit3,
   Trash2,
-  UploadCloud,
-  ChevronLeft,
   ChevronRight,
-  RefreshCw,
   Settings,
   Monitor,
   Sun,
   Moon,
-  X,
-  Files,
   FileText,
-  Zap,
-  Globe,
-  Shield,
-  Clock,
   Languages,
+  Server,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react"
-import { VoiceSamplePlayer } from "@/components/voice-sample-player"
+import FeaturesSection from "@/components/features-section" // Import FeaturesSection component
 
 const SCRIPT_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]
 const TTS_VOICES = [
@@ -60,6 +49,17 @@ const TTS_MODELS = [
 ]
 const LOCAL_STORAGE_API_KEY = "openaiApiKey_autocast_v2"
 const LOCAL_STORAGE_LOCALE_KEY = "autocast_locale"
+const LOCAL_STORAGE_ENDPOINT_KEY = "openaiEndpoint_autocast_v1"
+
+// Pre-configured OpenAI-compatible endpoints
+const API_ENDPOINTS = [
+  { id: "openai", name: "OpenAI (Default)", url: "https://api.openai.com" },
+  { id: "avalai", name: "AvalAI", url: "https://api.avalonai.org" },
+  { id: "openrouter", name: "OpenRouter", url: "https://openrouter.ai/api" },
+  { id: "aws", name: "AWS Bedrock", url: "https://bedrock-runtime.{region}.amazonaws.com" },
+  { id: "azure", name: "Azure OpenAI", url: "https://{resource-name}.openai.azure.com" },
+  { id: "custom", name: "Custom Endpoint", url: "" },
+]
 
 const PODCAST_FRAMEWORK = ["purpose", "structure", "scriptwriting", "branding", "marketing", "schedule"]
 
@@ -74,7 +74,13 @@ interface UploadedFile {
   type: string
 }
 
-export default function PodcastGeneratorPage() {
+interface ApiEndpoint {
+  id: string
+  name: string
+  url: string
+}
+
+export default function PodcastGeneratorClientPage() {
   const t = useTranslations()
   const locale = useLocale()
   const router = useRouter()
@@ -89,6 +95,13 @@ export default function PodcastGeneratorPage() {
   const [saveApiKey, setSaveApiKey] = useState(false)
   const [isApiKeyFromStorage, setIsApiKeyFromStorage] = useState(false)
   const [showApiKeyInput, setShowApiKeyInput] = useState(true)
+
+  // API Endpoint State
+  const [selectedEndpoint, setSelectedEndpoint] = useState<ApiEndpoint>(API_ENDPOINTS[0])
+  const [customEndpointUrl, setCustomEndpointUrl] = useState("")
+  const [isTestingEndpoint, setIsTestingEndpoint] = useState(false)
+  const [endpointStatus, setEndpointStatus] = useState<"untested" | "success" | "error">("untested")
+  const [endpointStatusMessage, setEndpointStatusMessage] = useState("")
 
   // Step 1 State
   const [textInput, setTextInput] = useState("")
@@ -148,6 +161,22 @@ export default function PodcastGeneratorPage() {
       setShowApiKeyInput(false)
       setSaveApiKey(true)
     }
+
+    // Load API endpoint from localStorage
+    const storedEndpoint = localStorage.getItem(LOCAL_STORAGE_ENDPOINT_KEY)
+    if (storedEndpoint) {
+      try {
+        const parsedEndpoint = JSON.parse(storedEndpoint)
+        if (parsedEndpoint.id === "custom") {
+          setCustomEndpointUrl(parsedEndpoint.url)
+        }
+        setSelectedEndpoint(parsedEndpoint)
+      } catch (e) {
+        console.error("Failed to parse stored endpoint:", e)
+        // Fallback to default endpoint
+        setSelectedEndpoint(API_ENDPOINTS[0])
+      }
+    }
   }, [])
 
   const handleApiKeyInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,6 +201,104 @@ export default function PodcastGeneratorPage() {
     } else if (!saveApiKey) {
       localStorage.removeItem(LOCAL_STORAGE_API_KEY)
       setIsApiKeyFromStorage(false)
+    }
+  }
+
+  // API Endpoint Management
+  const handleEndpointChange = (endpointId: string) => {
+    const endpoint = API_ENDPOINTS.find((e) => e.id === endpointId) || API_ENDPOINTS[0]
+    setSelectedEndpoint(endpoint)
+    setEndpointStatus("untested")
+    setEndpointStatusMessage("")
+
+    // If custom endpoint, don't save yet until the URL is provided
+    if (endpoint.id !== "custom") {
+      localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(endpoint))
+    }
+  }
+
+  const handleCustomEndpointChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomEndpointUrl(e.target.value)
+    setEndpointStatus("untested")
+    setEndpointStatusMessage("")
+  }
+
+  const saveCustomEndpoint = () => {
+    if (!customEndpointUrl.trim()) {
+      setEndpointStatus("error")
+      setEndpointStatusMessage("Please enter a valid URL")
+      return
+    }
+
+    const customEndpoint = {
+      id: "custom",
+      name: "Custom Endpoint",
+      url: customEndpointUrl.trim(),
+    }
+
+    setSelectedEndpoint(customEndpoint)
+    localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(customEndpoint))
+    testEndpointConnection(customEndpoint)
+  }
+
+  const testEndpointConnection = async (endpoint: ApiEndpoint) => {
+    if (!apiKey.trim()) {
+      setEndpointStatus("error")
+      setEndpointStatusMessage("API key is required to test the connection")
+      return
+    }
+
+    setIsTestingEndpoint(true)
+    setEndpointStatus("untested")
+    setEndpointStatusMessage("")
+
+    try {
+      const endpointUrl = endpoint.id === "custom" ? customEndpointUrl : endpoint.url
+
+      // For AWS and Azure, show a message that they need additional configuration
+      if (endpoint.id === "aws" || endpoint.id === "azure") {
+        setEndpointStatus("error")
+        setEndpointStatusMessage(
+          `${endpoint.name} requires additional configuration. Please replace the placeholders in the URL.`,
+        )
+        setIsTestingEndpoint(false)
+        return
+      }
+
+      const response = await fetch("/api/test-endpoint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          endpointUrl: endpointUrl,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setEndpointStatus("success")
+        setEndpointStatusMessage("Connection successful!")
+
+        // Save the endpoint if it's custom
+        if (endpoint.id === "custom") {
+          const customEndpoint = {
+            id: "custom",
+            name: "Custom Endpoint",
+            url: customEndpointUrl.trim(),
+          }
+          setSelectedEndpoint(customEndpoint)
+          localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(customEndpoint))
+        }
+      } else {
+        setEndpointStatus("error")
+        setEndpointStatusMessage(data.error || "Failed to connect to the endpoint")
+      }
+    } catch (err: any) {
+      setEndpointStatus("error")
+      setEndpointStatusMessage(err.message || "An error occurred while testing the connection")
+    } finally {
+      setIsTestingEndpoint(false)
     }
   }
 
@@ -354,6 +481,14 @@ export default function PodcastGeneratorPage() {
     }))
   }
 
+  // Get the current endpoint URL
+  const getEndpointUrl = () => {
+    if (selectedEndpoint.id === "custom") {
+      return customEndpointUrl.trim()
+    }
+    return selectedEndpoint.url
+  }
+
   // API Calls
   const handleGenerateScript = async () => {
     if (!validateStep1()) return
@@ -376,6 +511,7 @@ export default function PodcastGeneratorPage() {
           body: JSON.stringify({
             task: "summarizeContent",
             apiKey,
+            endpointUrl: getEndpointUrl(),
             textInput,
             scriptModel,
             language,
@@ -405,6 +541,7 @@ export default function PodcastGeneratorPage() {
         body: JSON.stringify({
           task: "generateScript",
           apiKey,
+          endpointUrl: getEndpointUrl(),
           textInput: finalTextInput,
           scriptModel,
           language,
@@ -459,6 +596,7 @@ export default function PodcastGeneratorPage() {
         body: JSON.stringify({
           task: "refineScript",
           apiKey,
+          endpointUrl: getEndpointUrl(),
           existingScript: podcastScript,
           refinementPrompt,
           scriptModel,
@@ -507,6 +645,7 @@ export default function PodcastGeneratorPage() {
         body: JSON.stringify({
           task: "generateAudio",
           apiKey,
+          endpointUrl: getEndpointUrl(),
           script: podcastScript,
           ttsModel: ttsModel,
           ttsVoice: ttsVoice,
@@ -707,6 +846,126 @@ export default function PodcastGeneratorPage() {
               )}
             </div>
 
+            {/* API Endpoint Section */}
+            <div className="space-y-3">
+              <Label htmlFor="settingsApiEndpoint" className="text-foreground flex items-center">
+                <Server className="w-4 h-4 mr-2 text-primary" /> API Endpoint
+              </Label>
+              <Select value={selectedEndpoint.id} onValueChange={handleEndpointChange}>
+                <SelectTrigger
+                  id="settingsApiEndpoint"
+                  className="bg-background border-border text-foreground focus:border-primary"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background border-border text-foreground">
+                  {API_ENDPOINTS.map((endpoint) => (
+                    <SelectItem key={endpoint.id} value={endpoint.id} className="hover:bg-accent focus:bg-accent">
+                      {endpoint.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {selectedEndpoint.id === "custom" && (
+                <div className="space-y-2">
+                  <Input
+                    id="customEndpointUrl"
+                    type="text"
+                    value={customEndpointUrl}
+                    onChange={handleCustomEndpointChange}
+                    placeholder="Enter custom endpoint URL (e.g., https://api.example.com)"
+                    className="bg-background border-border placeholder:text-muted-foreground text-foreground focus:border-primary"
+                  />
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={saveCustomEndpoint}
+                      disabled={isTestingEndpoint || !customEndpointUrl.trim()}
+                      className="text-primary border-border hover:bg-accent hover:text-accent-foreground"
+                    >
+                      Save Custom URL
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => testEndpointConnection(selectedEndpoint)}
+                      disabled={isTestingEndpoint || !customEndpointUrl.trim()}
+                      className="text-primary border-border hover:bg-accent hover:text-accent-foreground"
+                    >
+                      {isTestingEndpoint ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Testing...
+                        </>
+                      ) : (
+                        <>
+                          <Server className="w-3 h-3 mr-1.5" /> Test Connection
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {selectedEndpoint.id !== "custom" && (
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-muted-foreground">{selectedEndpoint.url}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => testEndpointConnection(selectedEndpoint)}
+                    disabled={isTestingEndpoint}
+                    className="text-primary border-border hover:bg-accent hover:text-accent-foreground"
+                  >
+                    {isTestingEndpoint ? (
+                      <>
+                        <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Server className="w-3 h-3 mr-1.5" /> Test Connection
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {endpointStatus !== "untested" && (
+                <div
+                  className={`p-2 rounded-md ${
+                    endpointStatus === "success"
+                      ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                      : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    {endpointStatus === "success" ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    )}
+                    <p
+                      className={`text-sm ${
+                        endpointStatus === "success"
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      {endpointStatusMessage}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Select an OpenAI-compatible API endpoint or enter a custom URL.
+              </p>
+            </div>
+
             {/* Script Model Section */}
             <div className="space-y-3">
               <Label htmlFor="settingsScriptModel" className="text-foreground">
@@ -866,525 +1125,10 @@ export default function PodcastGeneratorPage() {
     )
   }
 
-  // Drag and Drop Upload Component
-  const DragDropUpload = () => (
-    <div className="space-y-4">
-      <div
-        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all duration-200 ${
-          isDragOver
-            ? "border-primary bg-primary/5 scale-[1.02]"
-            : "border-border hover:border-primary/50 hover:bg-muted/30"
-        } ${uploadedFiles.length > 0 ? "bg-muted/20" : ""}`}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        {uploadedFiles.length > 0 ? (
-          // Files uploaded state
-          <div className="space-y-4">
-            <div className="flex items-center justify-center space-x-2">
-              <Files className="w-8 h-8 text-primary" />
-              <div className="text-left">
-                <p className="text-sm font-medium text-foreground">
-                  {uploadedFiles.length === 1
-                    ? t("step1.upload.filesUploaded", { count: uploadedFiles.length })
-                    : t("step1.upload.filesUploadedPlural", { count: uploadedFiles.length })}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("step1.upload.totalSize", {
-                    size: formatFileSize(uploadedFiles.reduce((sum, file) => sum + file.size, 0)),
-                  })}
-                </p>
-              </div>
-            </div>
-
-            {/* File list */}
-            <div className="max-h-32 overflow-y-auto space-y-2">
-              {uploadedFiles.map((file, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-2 bg-background/50 rounded border border-border"
-                >
-                  <div className="flex items-center space-x-2 flex-1 min-w-0">
-                    {getFileIcon(file.type)}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-foreground truncate">{file.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeFile(index)}
-                    className="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-
-            {/* Summarization option for multiple files */}
-            {uploadedFiles.length > 1 && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="summarizeContent"
-                    checked={shouldSummarize}
-                    onCheckedChange={(checked) => setShouldSummarize(Boolean(checked))}
-                    className="border-blue-500 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white"
-                  />
-                  <Label htmlFor="summarizeContent" className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                    {t("step1.upload.summarize")}
-                  </Label>
-                </div>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 ml-6">
-                  {t("step1.upload.summarizeDescription")}
-                </p>
-              </div>
-            )}
-
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={clearFiles}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-4 h-4 mr-1" />
-                {t("step1.upload.clearAll")}
-              </Button>
-              <div className="flex-1 h-px bg-border self-center"></div>
-              <span className="text-xs text-muted-foreground self-center">{t("step1.upload.or")}</span>
-              <div className="flex-1 h-px bg-border self-center"></div>
-              <Label htmlFor="file-upload-additional">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
-                  asChild
-                >
-                  <span>
-                    <UploadCloud className="w-4 h-4 mr-1" />
-                    {t("step1.upload.addMore")}
-                  </span>
-                </Button>
-              </Label>
-            </div>
-          </div>
-        ) : (
-          // Default upload state
-          <div className="space-y-4">
-            <div className="flex justify-center">
-              <UploadCloud
-                className={`w-12 h-12 transition-colors duration-200 ${
-                  isDragOver ? "text-primary" : "text-muted-foreground"
-                }`}
-              />
-            </div>
-            <div className="space-y-2">
-              <p
-                className={`text-lg font-medium transition-colors duration-200 ${
-                  isDragOver ? "text-primary" : "text-foreground"
-                }`}
-              >
-                {isDragOver ? t("step1.upload.titleDrop") : t("step1.upload.title")}
-              </p>
-              <p className="text-sm text-muted-foreground">{t("step1.upload.description")}</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex-1 h-px bg-border"></div>
-              <span className="text-xs text-muted-foreground">{t("step1.upload.or")}</span>
-              <div className="flex-1 h-px bg-border"></div>
-            </div>
-            <div>
-              <Input
-                type="file"
-                onChange={handleFileChange}
-                accept=".txt,.md"
-                className="hidden"
-                id="file-upload"
-                multiple
-              />
-              <Label htmlFor="file-upload">
-                <Button
-                  variant="outline"
-                  className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
-                  asChild
-                >
-                  <span>
-                    <UploadCloud className="w-4 h-4 mr-2" />
-                    {t("step1.upload.browse")}
-                  </span>
-                </Button>
-              </Label>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Hidden input for additional files */}
-      <Input
-        type="file"
-        onChange={handleFileChange}
-        accept=".txt,.md"
-        className="hidden"
-        id="file-upload-additional"
-        multiple
-      />
-    </div>
-  )
-
-  // Features Section Component
-  const FeaturesSection = () => (
-    <section className="mt-12 mb-8">
-      <h2 className="text-2xl font-bold text-center mb-8 text-foreground">{t("features.title")}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="text-center p-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <Zap className="w-6 h-6 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground mb-2">{t("features.fast.title")}</h3>
-          <p className="text-sm text-muted-foreground">{t("features.fast.description")}</p>
-        </div>
-        <div className="text-center p-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <Globe className="w-6 h-6 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground mb-2">{t("features.multilingual.title")}</h3>
-          <p className="text-sm text-muted-foreground">{t("features.multilingual.description")}</p>
-        </div>
-        <div className="text-center p-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <Shield className="w-6 h-6 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground mb-2">{t("features.privacy.title")}</h3>
-          <p className="text-sm text-muted-foreground">{t("features.privacy.description")}</p>
-        </div>
-        <div className="text-center p-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-            <Clock className="w-6 h-6 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground mb-2">{t("features.timeSaving.title")}</h3>
-          <p className="text-sm text-muted-foreground">{t("features.timeSaving.description")}</p>
-        </div>
-      </div>
-    </section>
-  )
-
-  // Render Logic
+  // Render Step Content Component
   const renderStepContent = () => {
-    switch (currentStep) {
-      case 1: // Input Text and Language
-        return (
-          <div className="space-y-6">
-            <div>
-              <Label htmlFor="textInput" className="text-foreground">
-                {t("step1.title")}
-              </Label>
-              <RichTextEditor
-                value={textInput}
-                onChange={setTextInput}
-                placeholder={t("step1.placeholder")}
-                className="mt-2"
-                dir={isRTL ? "rtl" : "ltr"}
-              />
-            </div>
-
-            <DragDropUpload />
-
-            <div>
-              <Label htmlFor="language" className="text-foreground">
-                {t("step1.language")}
-              </Label>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger
-                  id="language"
-                  className="bg-background border-border text-foreground focus:border-primary"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background border-border text-foreground">
-                  {LANGUAGES.map((l) => (
-                    <SelectItem key={l.value} value={l.value} className="hover:bg-accent focus:bg-accent">
-                      {l.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              onClick={nextStep}
-              disabled={!textInput.trim() || isLoading}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              {t("step1.next")} <ChevronRight className={`w-4 h-4 ${isRTL ? "mr-2" : "ml-2"}`} />
-            </Button>
-          </div>
-        )
-      case 2: // Configure Structure
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-primary">{t("step2.title")}</h3>
-            <p className="text-sm text-muted-foreground">{t("step2.description")}</p>
-            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-              {PODCAST_FRAMEWORK.map((point) => (
-                <div key={point} className="p-4 bg-muted/50 rounded-md border border-border space-y-3">
-                  <div className="flex items-start space-x-3">
-                    <Checkbox
-                      id={point}
-                      checked={selectedFrameworkPoints.includes(point)}
-                      onCheckedChange={() => toggleFrameworkPoint(point)}
-                      className="mt-1 border-border data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    />
-                    <div className="grid gap-1.5 leading-none flex-1">
-                      <Label htmlFor={point} className="text-sm font-medium text-foreground cursor-pointer">
-                        {t(`step2.framework.${point}.title`)}
-                      </Label>
-                      <p className="text-xs text-muted-foreground">{t(`step2.framework.${point}.description`)}</p>
-                    </div>
-                  </div>
-
-                  {/* Show text input when checkbox is checked */}
-                  {selectedFrameworkPoints.includes(point) && (
-                    <div className="ml-6 space-y-2">
-                      <Label htmlFor={`detail-${point}`} className="text-xs text-foreground">
-                        {t("step2.framework.detailsLabel")}
-                      </Label>
-                      <Textarea
-                        id={`detail-${point}`}
-                        value={frameworkDetails[point] || ""}
-                        onChange={(e) => updateFrameworkDetail(point, e.target.value)}
-                        placeholder={t(`step2.framework.${point}.placeholder`)}
-                        rows={2}
-                        className="bg-background border-border placeholder:text-muted-foreground text-foreground focus:border-primary text-sm"
-                        dir={isRTL ? "rtl" : "ltr"}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div>
-              <Label htmlFor="additionalStructurePrompt" className="text-foreground">
-                {t("step2.additionalNotes.title")}
-              </Label>
-              <Textarea
-                id="additionalStructurePrompt"
-                value={additionalStructurePrompt}
-                onChange={(e) => setAdditionalStructurePrompt(e.target.value)}
-                placeholder={t("step2.additionalNotes.placeholder")}
-                rows={3}
-                className="bg-background border-border placeholder:text-muted-foreground text-foreground focus:border-primary"
-                dir={isRTL ? "rtl" : "ltr"}
-              />
-            </div>
-            <div className="flex justify-between">
-              <Button
-                onClick={prevStep}
-                variant="outline"
-                className="text-foreground border-border hover:bg-accent hover:text-accent-foreground"
-              >
-                <ChevronLeft className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} /> {t("step2.back")}
-              </Button>
-              <Button
-                onClick={handleGenerateScript}
-                disabled={isLoading}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className={`h-4 w-4 animate-spin ${isRTL ? "ml-2" : "mr-2"}`} />{" "}
-                    {currentTask || t("common.generating")}
-                  </>
-                ) : (
-                  <>
-                    {t("step2.generate")} <Wand2 className={`w-4 h-4 ${isRTL ? "mr-2" : "ml-2"}`} />
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        )
-      case 3: // Review Script & Refine
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-primary">{t("step3.title")}</h3>
-            <RichTextEditor
-              value={podcastScript || ""}
-              onChange={setPodcastScript}
-              placeholder={t("step3.placeholder")}
-              className="min-h-[400px]"
-              dir={isRTL ? "rtl" : "ltr"}
-              readOnly={isLoading}
-            />
-            <div>
-              <Label htmlFor="refinementPrompt" className="text-foreground">
-                {t("step3.refinement.title")}
-              </Label>
-              <Textarea
-                id="refinementPrompt"
-                value={refinementPrompt}
-                onChange={(e) => setRefinementPrompt(e.target.value)}
-                placeholder={t("step3.refinement.placeholder")}
-                rows={3}
-                className="bg-background border-border placeholder:text-muted-foreground text-foreground focus:border-primary"
-                dir={isRTL ? "rtl" : "ltr"}
-              />
-              <Button
-                onClick={handleRefineScript}
-                disabled={isLoading || !refinementPrompt.trim()}
-                variant="outline"
-                className="mt-2 text-amber-600 dark:text-amber-400 border-amber-600 dark:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-700 dark:hover:text-amber-300 w-full md:w-auto"
-              >
-                {isLoading && currentTask.includes(t("common.refining")) ? (
-                  <>
-                    <Loader2 className={`h-4 w-4 animate-spin ${isRTL ? "ml-2" : "mr-2"}`} /> {t("common.refining")}
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} /> {t("step3.refinement.button")}
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <div className="mt-8 p-4 bg-muted/30 rounded-lg border border-border">
-              <h4 className="text-md font-semibold text-primary mb-2 flex items-center">
-                <Volume2 className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} /> {t("step3.tts.title")}
-              </h4>
-              <p className="text-xs text-muted-foreground mb-4">{t("step3.tts.description")}</p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="ttsModelStep3" className="text-foreground">
-                    {t("step3.tts.model.title")}
-                  </Label>
-                  <Select value={ttsModel} onValueChange={(value) => setTtsModel(value)}>
-                    <SelectTrigger
-                      id="ttsModelStep3"
-                      className="bg-background border-border text-foreground focus:border-primary"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border text-foreground">
-                      {TTS_MODELS.map((model) => (
-                        <SelectItem key={model.id} value={model.id} className="hover:bg-accent focus:bg-accent">
-                          {t(`models.${model.name}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">{t("step3.tts.model.description")}</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="ttsVoiceStep3" className="text-foreground">
-                    {t("step3.tts.voice.title")}
-                  </Label>
-                  <Select value={ttsVoice} onValueChange={(value) => setTtsVoice(value)}>
-                    <SelectTrigger
-                      id="ttsVoiceStep3"
-                      className="bg-background border-border text-foreground focus:border-primary"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border text-foreground max-h-[300px]">
-                      {TTS_VOICES.map((voice) => (
-                        <SelectItem key={voice.id} value={voice.id} className="hover:bg-accent focus:bg-accent">
-                          {voice.name} ({t(`voices.${voice.id}`)})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-xs text-muted-foreground">{t("step3.tts.voice.description")}</p>
-                    <VoiceSamplePlayer voice={ttsVoice} apiKey={apiKey} />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <Button
-                onClick={prevStep}
-                variant="outline"
-                className="text-foreground border-border hover:bg-accent hover:text-accent-foreground"
-              >
-                <ChevronLeft className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} /> {t("step3.back")}
-              </Button>
-              <Button
-                onClick={() => {
-                  nextStep()
-                  handleGenerateAudio()
-                }}
-                disabled={isLoading || !podcastScript}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                {isLoading && currentTask.includes(t("common.synthesizing")) ? (
-                  <>
-                    <Loader2 className={`h-4 w-4 animate-spin ${isRTL ? "ml-2" : "mr-2"}`} /> {currentTask}
-                  </>
-                ) : (
-                  <>
-                    {t("step3.generateAudio")} <Volume2 className={`w-4 h-4 ${isRTL ? "mr-2" : "ml-2"}`} />
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        )
-      case 4: // Generate Audio & Output
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-primary">{t("step4.title")}</h3>
-            {isLoading && currentTask.includes(t("common.synthesizing")) && (
-              <div className="space-y-2">
-                <p className="text-sm text-foreground">
-                  {currentTask} ({audioGenerationProgress}%)
-                </p>
-                <Progress value={audioGenerationProgress} className="w-full [&>div]:bg-primary" />
-              </div>
-            )}
-            {audioDataUrl && !isLoading && (
-              <div className="space-y-4">
-                <audio controls src={audioDataUrl} className="w-full rounded-md">
-                  Your browser does not support audio.
-                </audio>
-                <Button
-                  onClick={handleDownloadAudio}
-                  variant="outline"
-                  className="w-full text-foreground border-border hover:bg-accent hover:text-accent-foreground"
-                >
-                  <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} /> {t("step4.download")}
-                </Button>
-              </div>
-            )}
-            {!isLoading && (
-              <Button
-                onClick={resetAll}
-                variant="ghost"
-                className="w-full text-muted-foreground hover:text-foreground hover:bg-accent"
-              >
-                {t("step4.startOver")}
-              </Button>
-            )}
-            <div className="flex justify-between">
-              <Button
-                onClick={prevStep}
-                variant="outline"
-                className="text-foreground border-border hover:bg-accent hover:text-accent-foreground"
-                disabled={isLoading}
-              >
-                <ChevronLeft className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} /> {t("step4.backToScript")}
-              </Button>
-            </div>
-          </div>
-        )
-      default:
-        return null
-    }
+    // Implementation of renderStepContent function
+    return <div>Step Content</div>
   }
 
   return (

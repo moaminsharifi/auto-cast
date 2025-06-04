@@ -1,10 +1,12 @@
 import { generateText } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 
-// Helper to get typed OpenAI model instance
-const getOpenAIInstance = (apiKey: string, modelName: string) => {
-  const customOpenAI = createOpenAI({ apiKey })
-  return customOpenAI(modelName) // This now correctly uses the modelName string
+// Helper to get typed OpenAI model instance with custom endpoint
+const getOpenAIInstance = (apiKey: string, modelName: string, endpointUrl?: string) => {
+  // If a custom endpoint is provided, use it
+  const baseURL = endpointUrl ? endpointUrl : undefined
+  const customOpenAI = createOpenAI({ apiKey, baseURL })
+  return customOpenAI(modelName)
 }
 
 export async function POST(req: Request) {
@@ -13,6 +15,7 @@ export async function POST(req: Request) {
     const {
       task,
       apiKey,
+      endpointUrl,
       textInput,
       scriptModel,
       language,
@@ -33,7 +36,11 @@ export async function POST(req: Request) {
       return Response.json({ error: "OpenAI API key is required." }, { status: 401 })
     }
 
-    const openaiInstance = createOpenAI({ apiKey })
+    // Use the custom endpoint if provided
+    const openaiInstance = createOpenAI({
+      apiKey,
+      baseURL: endpointUrl || undefined,
+    })
 
     if (task === "summarizeContent") {
       if (!textInput || !scriptModel || !language) {
@@ -171,7 +178,13 @@ Refined Podcast Script:`
         return Response.json({ error: "Missing fields for audio generation." }, { status: 400 })
       }
 
-      const ttsResponse = await fetch("https://api.openai.com/v1/audio/speech", {
+      // For TTS, we need to use the OpenAI API directly
+      // Normalize the endpoint URL or use the default OpenAI URL
+      const ttsEndpointUrl = endpointUrl
+        ? `${endpointUrl.endsWith("/") ? endpointUrl.slice(0, -1) : endpointUrl}/v1/audio/speech`
+        : "https://api.openai.com/v1/audio/speech"
+
+      const ttsResponse = await fetch(ttsEndpointUrl, {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model: ttsModel, input: script, voice: ttsVoice, response_format: "mp3" }),
@@ -180,7 +193,7 @@ Refined Podcast Script:`
       if (!ttsResponse.ok) {
         const errorData = await ttsResponse.json().catch(() => ({}))
         throw new Error(
-          `OpenAI TTS API Error: ${errorData.error?.message || ttsResponse.statusText} (Status: ${ttsResponse.status})`,
+          `TTS API Error: ${errorData.error?.message || ttsResponse.statusText} (Status: ${ttsResponse.status})`,
         )
       }
       const audioBlob = await ttsResponse.blob()
@@ -246,6 +259,6 @@ const PODCAST_FRAMEWORK = [
     id: "schedule_improvement",
     title: "Consistent Schedule & Continuous Improvement",
     description:
-      "Establish a regular release schedule to build listener trust. Gather feedback, track analytics, and refine your content and delivery over time.",
+      "Establish a realistic publishing schedule that you can maintain. Regularly review analytics to understand what content resonates with your audience.",
   },
 ]
