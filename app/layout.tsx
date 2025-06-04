@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://your-domain.com",
+    url: process.env.SITE_URL || "",
     title: "AutoCast - Convert Text to Professional Podcasts with AI",
     description:
       "Transform your written content into engaging podcast scripts and audio using advanced AI. Support for multiple languages and professional-quality voices.",
@@ -67,14 +67,14 @@ export const metadata: Metadata = {
     creator: "@yourhandle",
   },
   alternates: {
-    canonical: "https://your-domain.com",
+    canonical: process.env.SITE_URL || "",
   },
   category: "Technology",
   classification: "AI Tools",
   other: {
-    "google-site-verification": "your-google-verification-code",
+    "google-site-verification": process.env.GOOGLE_VERIFICATION || "",
   },
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 const jsonLd = {
@@ -82,7 +82,7 @@ const jsonLd = {
   "@type": "WebApplication",
   name: "AutoCast",
   description: "Transform your written content into engaging podcast scripts and audio using advanced AI technology",
-  url: "https://your-domain.com",
+  url: process.env.SITE_URL || "",
   applicationCategory: "MultimediaApplication",
   operatingSystem: "Web Browser",
   offers: {

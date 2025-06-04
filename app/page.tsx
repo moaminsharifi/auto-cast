@@ -342,33 +342,50 @@ export default function PodcastGeneratorPage() {
         return
       }
 
-      const response = await fetch("/api/test-endpoint", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey,
-          endpointUrl: normalizedUrl,
-        }),
+      // Since we're in a static export, we can't use API routes
+      // Instead, we'll do a direct test to the endpoint
+      const testUrl = `${normalizedUrl}/v1/models`
+
+      const response = await fetch(testUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
       })
 
-      const data = await response.json()
-
       if (response.ok) {
-        setEndpointStatus("success")
-        setEndpointStatusMessage("Connection successful!")
-        // Save the endpoint if it's custom
-        if (endpoint.id === "custom") {
-          const customEndpoint = {
-            id: "custom",
-            name: "Custom Endpoint",
-            url: customEndpointUrl.trim(),
+        const data = await response.json()
+        if (data.data && Array.isArray(data.data)) {
+          setEndpointStatus("success")
+          setEndpointStatusMessage("Connection successful!")
+          // Save the endpoint if it's custom
+          if (endpoint.id === "custom") {
+            const customEndpoint = {
+              id: "custom",
+              name: "Custom Endpoint",
+              url: customEndpointUrl.trim(),
+            }
+            setSelectedEndpoint(customEndpoint)
+            localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(customEndpoint))
           }
-          setSelectedEndpoint(customEndpoint)
-          localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(customEndpoint))
+        } else {
+          setEndpointStatus("error")
+          setEndpointStatusMessage("Invalid response format from endpoint")
         }
       } else {
+        const errorText = await response.text()
+        let errorMessage = `HTTP ${response.status}`
+
+        try {
+          const errorData = JSON.parse(errorText)
+          errorMessage = errorData.error?.message || errorData.message || errorMessage
+        } catch {
+          errorMessage = response.statusText || errorText || errorMessage
+        }
+
         setEndpointStatus("error")
-        setEndpointStatusMessage(data.error || `Failed to connect: ${response.status}`)
+        setEndpointStatusMessage(`Connection failed: ${errorMessage}`)
       }
     } catch (err: any) {
       setEndpointStatus("error")
@@ -565,6 +582,28 @@ export default function PodcastGeneratorPage() {
     }))
   }
 
+  // Direct API calls for static export
+  const callOpenAIAPI = async (endpoint: string, payload: any) => {
+    const endpointUrl = getEndpointUrl()
+    const normalizedUrl = endpointUrl.endsWith("/") ? endpointUrl.slice(0, -1) : endpointUrl
+
+    const response = await fetch(`${normalizedUrl}${endpoint}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error?.message || `API request failed: ${response.status}`)
+    }
+
+    return response
+  }
+
   // API Calls
   const handleGenerateScript = async () => {
     if (!validateStep1()) return
@@ -581,27 +620,43 @@ export default function PodcastGeneratorPage() {
       if (uploadedFiles.length > 1 && shouldSummarize) {
         setCurrentTask("Summarizing content from multiple files...")
 
-        const summarizeResponse = await fetch("/api/generate-podcast", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            task: "summarizeContent",
-            apiKey,
-            textInput,
-            scriptModel,
-            language,
-            temperature,
-            maxTokens,
-            endpointUrl: getEndpointUrl(),
-          }),
+        const languageInstruction =
+          language === "fa"
+            ? "The summary MUST be written entirely in Persian (Farsi)."
+            : "The summary MUST be written entirely in English."
+
+        const prompt = `You are an expert content summarizer. Your task is to create a comprehensive yet concise summary of the following multiple documents/texts that will be used to generate a podcast script.
+
+${languageInstruction}
+
+Please:
+1. Identify the main themes and key points across all documents
+2. Combine related information from different sources
+3. Maintain the most important details and insights
+4. Create a coherent narrative that flows well
+5. Preserve any important quotes, statistics, or specific examples
+6. Ensure the summary is suitable for podcast script generation
+
+Content to summarize:
+---
+${textInput}
+---
+
+Comprehensive Summary:`
+
+        const response = await callOpenAIAPI("/v1/chat/completions", {
+          model: scriptModel,
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: maxTokens,
+          temperature: temperature,
         })
 
-        const summarizeData = await summarizeResponse.json()
-        if (!summarizeResponse.ok) {
-          throw new Error(summarizeData.error || "Content summarization failed")
+        const data = await response.json()
+        if (!data.choices?.[0]?.message?.content) {
+          throw new Error("AI returned an empty summary.")
         }
 
-        finalTextInput = summarizeData.summary
+        finalTextInput = data.choices[0].message.content
         setTextInput(finalTextInput) // Update the text input with summarized content
       }
 
@@ -611,39 +666,70 @@ export default function PodcastGeneratorPage() {
       const selectedTemplate = SYSTEM_PROMPT_TEMPLATES.find((t) => t.id === systemPromptTemplate)
       const systemPrompt = systemPromptTemplate === "custom" ? customSystemPrompt : selectedTemplate?.prompt || ""
 
-      const response = await fetch("/api/generate-podcast", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task: "generateScript",
-          apiKey,
-          textInput: finalTextInput,
-          scriptModel,
-          language,
-          selectedFrameworkPoints,
-          frameworkDetails,
-          additionalStructurePrompt,
-          systemPrompt,
-          temperature,
-          maxTokens,
-          endpointUrl: getEndpointUrl(),
-        }),
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        if (response.status === 401) {
-          setError("Invalid OpenAI API Key. Please check your key in settings.")
-          handleClearAndEditApiKey()
-          setSettingsOpen(true)
-        } else {
-          throw new Error(data.error || "Script generation failed")
-        }
-        return
+      let frameworkInstructions = ""
+      if (selectedFrameworkPoints && selectedFrameworkPoints.length > 0) {
+        frameworkInstructions = "Consider the following podcast structure guidelines:\n"
+
+        selectedFrameworkPoints.forEach((pointId: string) => {
+          const point = PODCAST_FRAMEWORK.find((p) => p.id === pointId)
+          if (point) {
+            frameworkInstructions += `- ${point.title}: ${point.description}\n`
+
+            // Add user's specific details if provided
+            if (frameworkDetails && frameworkDetails[pointId]) {
+              frameworkInstructions += `  User's specific requirements: ${frameworkDetails[pointId]}\n`
+            }
+          }
+        })
+        frameworkInstructions += "\n"
       }
-      setPodcastScript(data.script)
+
+      if (additionalStructurePrompt) {
+        frameworkInstructions += `Additional structuring notes: ${additionalStructurePrompt}\n`
+      }
+
+      const languageInstruction =
+        language === "fa"
+          ? "The podcast script MUST be written entirely in Persian (Farsi)."
+          : "The podcast script MUST be written entirely in English."
+
+      const prompt = `${systemPrompt}
+
+Transform the following text into an engaging, conversational podcast script in ${language === "fa" ? "Persian" : "English"}.
+${languageInstruction}
+${frameworkInstructions}
+The script should include a captivating intro, a well-structured main body explaining key points, and a concise conclusion.
+Make sure to incorporate the user's specific requirements for each selected framework point.
+Ensure the output is ONLY the script itself, without any surrounding explanations or preambles.
+
+Original Text:
+---
+${finalTextInput}
+---
+Podcast Script:`
+
+      const response = await callOpenAIAPI("/v1/chat/completions", {
+        model: scriptModel,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        temperature: temperature,
+      })
+
+      const data = await response.json()
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error("AI returned an empty script.")
+      }
+
+      setPodcastScript(data.choices[0].message.content)
       nextStep() // Move to Step 3 (Review)
     } catch (err: any) {
-      setError(err.message)
+      if (err.message.includes("401") || err.message.includes("Authentication")) {
+        setError("Invalid OpenAI API Key. Please check your key in settings.")
+        handleClearAndEditApiKey()
+        setSettingsOpen(true)
+      } else {
+        setError(err.message)
+      }
     } finally {
       setIsLoading(false)
       setCurrentTask("")
@@ -666,25 +752,40 @@ export default function PodcastGeneratorPage() {
       const selectedTemplate = SYSTEM_PROMPT_TEMPLATES.find((t) => t.id === systemPromptTemplate)
       const systemPrompt = systemPromptTemplate === "custom" ? customSystemPrompt : selectedTemplate?.prompt || ""
 
-      const response = await fetch("/api/generate-podcast", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          task: "refineScript",
-          apiKey,
-          existingScript: podcastScript,
-          refinementPrompt,
-          scriptModel,
-          language,
-          systemPrompt,
-          temperature,
-          maxTokens,
-          endpointUrl: getEndpointUrl(),
-        }),
+      const languageInstruction =
+        language === "fa"
+          ? "The refined podcast script MUST be written entirely in Persian (Farsi)."
+          : "The refined podcast script MUST be written entirely in English."
+
+      const prompt = `${systemPrompt}
+
+Refine the following podcast script based on the user's feedback.
+${languageInstruction}
+Ensure the output is ONLY the refined script itself.
+
+Original Script:
+---
+${podcastScript}
+---
+User Feedback for Refinement:
+---
+${refinementPrompt}
+---
+Refined Podcast Script:`
+
+      const response = await callOpenAIAPI("/v1/chat/completions", {
+        model: scriptModel,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: maxTokens,
+        temperature: temperature,
       })
+
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || "Script refinement failed")
-      setPodcastScript(data.script)
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error("AI returned an empty refined script.")
+      }
+
+      setPodcastScript(data.choices[0].message.content)
       setRefinementPrompt("") // Clear prompt after use
     } catch (err: any) {
       setError(err.message)
@@ -715,23 +816,38 @@ export default function PodcastGeneratorPage() {
     }, 300)
 
     try {
-      const response = await fetch("/api/generate-podcast", {
+      const endpointUrl = getEndpointUrl()
+      const normalizedUrl = endpointUrl.endsWith("/") ? endpointUrl.slice(0, -1) : endpointUrl
+
+      const response = await fetch(`${normalizedUrl}/v1/audio/speech`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          task: "generateAudio",
-          apiKey,
-          script: podcastScript,
-          ttsModel: ttsModel,
-          ttsVoice: ttsVoice,
-          endpointUrl: getEndpointUrl(),
+          model: ttsModel,
+          input: podcastScript,
+          voice: ttsVoice,
+          response_format: "mp3",
         }),
       })
+
       clearInterval(progressInterval)
       setAudioGenerationProgress(100)
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || "Audio generation failed")
-      setAudioDataUrl(data.audioDataUrl)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(
+          `OpenAI TTS API Error: ${errorData.error?.message || response.statusText} (Status: ${response.status})`,
+        )
+      }
+
+      const audioBlob = await response.blob()
+      const audioBuffer = await audioBlob.arrayBuffer()
+      const audioBase64 = Buffer.from(audioBuffer).toString("base64")
+      const audioDataUrl = `data:audio/mpeg;base64,${audioBase64}`
+      setAudioDataUrl(audioDataUrl)
     } catch (err: any) {
       clearInterval(progressInterval)
       setAudioGenerationProgress(0)
@@ -1215,7 +1331,7 @@ export default function PodcastGeneratorPage() {
                     <p className="text-xs text-muted-foreground">
                       Choose a voice that matches your podcast's tone and style.
                     </p>
-                    <VoiceSamplePlayer voice={ttsVoice} apiKey={apiKey} />
+                    <VoiceSamplePlayer voice={ttsVoice} apiKey={apiKey} endpointUrl={getEndpointUrl()} />
                   </div>
                 </div>
               </div>
