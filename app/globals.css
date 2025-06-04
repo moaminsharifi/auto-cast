@@ -1,0 +1,208 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Rich Text Editor Prose Styles */
+.prose {
+  color: hsl(var(--foreground));
+  max-width: none;
+}
+
+.prose h1 {
+  color: hsl(var(--foreground));
+  font-weight: 800;
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.prose h2 {
+  color: hsl(var(--foreground));
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.prose h3 {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose p {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.prose strong {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.prose em {
+  color: hsl(var(--foreground));
+  font-style: italic;
+}
+
+.prose u {
+  text-decoration: underline;
+}
+
+.prose code {
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--muted));
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.prose blockquote {
+  border-left: 4px solid hsl(var(--border));
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+}
+
+.prose ul,
+.prose ol {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin: 0.5rem 0;
+}
+
+.prose a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+
+.prose a:hover {
+  color: hsl(var(--primary));
+  opacity: 0.8;
+}
+
+.dark .prose {
+  color: hsl(var(--foreground));
+}
+
+.dark .prose h1,
+.dark .prose h2,
+.dark .prose h3,
+.dark .prose strong {
+  color: hsl(var(--foreground));
+}
+
+.dark .prose code {
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--muted));
+}
+
+.dark .prose blockquote {
+  border-left-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+
+/* Slider Styling */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: hsl(var(--muted));
+  outline: none;
+  border-radius: 0.5rem;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dark .slider::-webkit-slider-thumb {
+  border: 2px solid hsl(var(--background));
+}
+
+.dark .slider::-moz-range-thumb {
+  border: 2px solid hsl(var(--background));
+}
