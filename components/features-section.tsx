@@ -1,11 +1,11 @@
 "use client"
 
 import { Card, CardContent } from "@/components/ui/card"
-import { useTranslations } from "next-intl"
+import { useTranslations } from "@/hooks/useTranslations"
 import { Mic, Wand2, Globe, Shield } from "lucide-react"
 
 export default function FeaturesSection() {
-  const t = useTranslations()
+  const { t } = useTranslations()
 
   return (
     <div className="w-full max-w-4xl mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
