@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Play, Square, Loader2 } from "lucide-react"
 
@@ -11,7 +10,6 @@ interface VoiceSamplePlayerProps {
 }
 
 export function VoiceSamplePlayer({ voice, apiKey }: VoiceSamplePlayerProps) {
-  const t = useTranslations()
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [audio, setAudio] = useState<HTMLAudioElement | null>(null)
@@ -83,7 +81,7 @@ export function VoiceSamplePlayer({ voice, apiKey }: VoiceSamplePlayerProps) {
       ) : (
         <Play className="w-3 h-3 mr-1" />
       )}
-      {isPlaying ? t("common.stopSample") : t("common.playSample")}
+      {isPlaying ? "Stop" : "Play sample"}
     </Button>
   )
 }
