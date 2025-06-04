@@ -13,8 +13,7 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
-  assetPrefix: process.env.NODE_ENV === 'production' ? '/auto-cast/' : '',
-  basePath: process.env.NODE_ENV === 'production' ? '/auto-cast' : '',
+  // Removed assetPrefix and basePath to use standard /_next/ paths
 }
 
 export default nextConfig
