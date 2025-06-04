@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useCallback } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,27 +12,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RichTextEditor } from "@/components/rich-text-editor"
-import { useTheme } from "@/components/theme-provider"
 import {
   Loader2,
-  Mic,
   AlertCircle,
   Wand2,
   Volume2,
   Download,
-  KeyRound,
-  Edit3,
-  Trash2,
   UploadCloud,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
   Settings,
-  Monitor,
-  Sun,
-  Moon,
   X,
   Files,
   FileText,
@@ -41,8 +33,8 @@ import {
   Clock,
 } from "lucide-react"
 import { VoiceSamplePlayer } from "@/components/voice-sample-player"
+import { SettingsModal } from "@/components/settings-modal"
 
-const SCRIPT_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"]
 const TTS_VOICES = [
   { id: "alloy", name: "Alloy", description: "Neutral, balanced voice with clear articulation" },
   { id: "echo", name: "Echo", description: "Male voice with deep, resonant tone and clear delivery" },
@@ -56,6 +48,9 @@ const TTS_MODELS = [
   { id: "tts-1-hd", name: "HD Quality", description: "Higher fidelity voice with more natural intonation" },
 ]
 const LOCAL_STORAGE_API_KEY = "openaiApiKey_autocast_v2"
+const LOCAL_STORAGE_ENDPOINT_KEY = "openaiEndpoint_autocast_v1"
+
+// Pre-configured OpenAI-compatible endpoints
 
 const PODCAST_FRAMEWORK = [
   {
@@ -155,6 +150,12 @@ interface UploadedFile {
   type: string
 }
 
+interface ApiEndpoint {
+  id: string
+  name: string
+  url: string
+}
+
 export default function PodcastGeneratorPage() {
   const [currentStep, setCurrentStep] = useState(1)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -165,11 +166,22 @@ export default function PodcastGeneratorPage() {
   const [isApiKeyFromStorage, setIsApiKeyFromStorage] = useState(false)
   const [showApiKeyInput, setShowApiKeyInput] = useState(true)
 
+  // API Endpoint State
+  const [selectedEndpoint, setSelectedEndpoint] = useState<ApiEndpoint>({
+    id: "openai",
+    name: "OpenAI (Default)",
+    url: "https://api.openai.com",
+  })
+  const [customEndpointUrl, setCustomEndpointUrl] = useState("")
+  const [isTestingEndpoint, setIsTestingEndpoint] = useState(false)
+  const [endpointStatus, setEndpointStatus] = useState<"untested" | "success" | "error">("untested")
+  const [endpointStatusMessage, setEndpointStatusMessage] = useState("")
+
   // Step 1 State
   const [textInput, setTextInput] = useState("")
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [shouldSummarize, setShouldSummarize] = useState(false)
-  const [scriptModel, setScriptModel] = useState(SCRIPT_MODELS[0])
+  const [scriptModel, setScriptModel] = useState("gpt-4o-mini")
   const [language, setLanguage] = useState("en")
 
   // Drag and Drop State
@@ -216,12 +228,30 @@ export default function PodcastGeneratorPage() {
       setShowApiKeyInput(false)
       setSaveApiKey(true)
     }
+
+    // Load API endpoint from localStorage
+    const storedEndpoint = localStorage.getItem(LOCAL_STORAGE_ENDPOINT_KEY)
+    if (storedEndpoint) {
+      try {
+        const parsedEndpoint = JSON.parse(storedEndpoint)
+        if (parsedEndpoint.id === "custom") {
+          setCustomEndpointUrl(parsedEndpoint.url)
+        }
+        setSelectedEndpoint(parsedEndpoint)
+      } catch (e) {
+        console.error("Failed to parse stored endpoint:", e)
+        setSelectedEndpoint({ id: "openai", name: "OpenAI (Default)", url: "https://api.openai.com" })
+      }
+    }
   }, [])
 
-  const handleApiKeyInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setApiKey(e.target.value)
-    if (isApiKeyFromStorage && showApiKeyInput) setIsApiKeyFromStorage(false)
-  }
+  const handleApiKeyInputChange = useCallback(
+    (value: string) => {
+      setApiKey(value)
+      if (isApiKeyFromStorage && showApiKeyInput) setIsApiKeyFromStorage(false)
+    },
+    [isApiKeyFromStorage, showApiKeyInput],
+  )
 
   const handleClearAndEditApiKey = () => {
     localStorage.removeItem(LOCAL_STORAGE_API_KEY)
@@ -241,6 +271,119 @@ export default function PodcastGeneratorPage() {
       localStorage.removeItem(LOCAL_STORAGE_API_KEY)
       setIsApiKeyFromStorage(false)
     }
+  }
+
+  // Endpoint Management
+  const handleEndpointChange = (endpointId: string) => {
+    const endpoint = [
+      { id: "openai", name: "OpenAI (Default)", url: "https://api.openai.com" },
+      { id: "avalai", name: "AvalAI", url: "https://api.avalai.ir" },
+      { id: "openrouter", name: "OpenRouter", url: "https://openrouter.ai/api" },
+      { id: "aws", name: "AWS Bedrock", url: "https://bedrock-runtime.{region}.amazonaws.com" },
+      { id: "azure", name: "Azure OpenAI", url: "https://{resource-name}.openai.azure.com" },
+      { id: "custom", name: "Custom Endpoint", url: "" },
+    ].find((e) => e.id === endpointId) || { id: "openai", name: "OpenAI (Default)", url: "https://api.openai.com" }
+    setSelectedEndpoint(endpoint)
+    setEndpointStatus("untested")
+    setEndpointStatusMessage("")
+
+    // If custom endpoint, don't save yet until the URL is provided
+    if (endpoint.id !== "custom") {
+      localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(endpoint))
+    }
+  }
+
+  const handleCustomEndpointChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomEndpointUrl(e.target.value)
+    setEndpointStatus("untested")
+    setEndpointStatusMessage("")
+  }
+
+  const saveCustomEndpoint = () => {
+    if (!customEndpointUrl.trim()) {
+      setEndpointStatus("error")
+      setEndpointStatusMessage("Please enter a valid URL")
+      return
+    }
+
+    const customEndpoint = {
+      id: "custom",
+      name: "Custom Endpoint",
+      url: customEndpointUrl.trim(),
+    }
+
+    setSelectedEndpoint(customEndpoint)
+    localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(customEndpoint))
+    testEndpointConnection(customEndpoint)
+  }
+
+  const testEndpointConnection = async (endpoint: ApiEndpoint) => {
+    if (!apiKey.trim()) {
+      setEndpointStatus("error")
+      setEndpointStatusMessage("API key is required to test the connection")
+      return
+    }
+
+    setIsTestingEndpoint(true)
+    setEndpointStatus("untested")
+    setEndpointStatusMessage("")
+
+    try {
+      const endpointUrl = endpoint.id === "custom" ? customEndpointUrl : endpoint.url
+      const normalizedUrl = endpointUrl.endsWith("/") ? endpointUrl.slice(0, -1) : endpointUrl
+
+      // For AWS and Azure, show a message that they need additional configuration
+      if (endpoint.id === "aws" || endpoint.id === "azure") {
+        setEndpointStatus("error")
+        setEndpointStatusMessage(
+          `${endpoint.name} requires additional configuration. Please replace the placeholders in the URL.`,
+        )
+        setIsTestingEndpoint(false)
+        return
+      }
+
+      const response = await fetch("/api/test-endpoint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey,
+          endpointUrl: normalizedUrl,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setEndpointStatus("success")
+        setEndpointStatusMessage("Connection successful!")
+        // Save the endpoint if it's custom
+        if (endpoint.id === "custom") {
+          const customEndpoint = {
+            id: "custom",
+            name: "Custom Endpoint",
+            url: customEndpointUrl.trim(),
+          }
+          setSelectedEndpoint(customEndpoint)
+          localStorage.setItem(LOCAL_STORAGE_ENDPOINT_KEY, JSON.stringify(customEndpoint))
+        }
+      } else {
+        setEndpointStatus("error")
+        setEndpointStatusMessage(data.error || `Failed to connect: ${response.status}`)
+      }
+    } catch (err: any) {
+      setEndpointStatus("error")
+      setEndpointStatusMessage(err.message || "An error occurred while testing the connection")
+    } finally {
+      setIsTestingEndpoint(false)
+    }
+  }
+
+  // Get the current endpoint URL
+  const getEndpointUrl = () => {
+    if (selectedEndpoint.id === "custom") {
+      return customEndpointUrl.trim()
+    }
+    return selectedEndpoint.url
   }
 
   // Format file size
@@ -449,6 +592,7 @@ export default function PodcastGeneratorPage() {
             language,
             temperature,
             maxTokens,
+            endpointUrl: getEndpointUrl(),
           }),
         })
 
@@ -482,6 +626,7 @@ export default function PodcastGeneratorPage() {
           systemPrompt,
           temperature,
           maxTokens,
+          endpointUrl: getEndpointUrl(),
         }),
       })
       const data = await response.json()
@@ -534,6 +679,7 @@ export default function PodcastGeneratorPage() {
           systemPrompt,
           temperature,
           maxTokens,
+          endpointUrl: getEndpointUrl(),
         }),
       })
       const data = await response.json()
@@ -578,6 +724,7 @@ export default function PodcastGeneratorPage() {
           script: podcastScript,
           ttsModel: ttsModel,
           ttsVoice: ttsVoice,
+          endpointUrl: getEndpointUrl(),
         }),
       })
       clearInterval(progressInterval)
@@ -610,7 +757,6 @@ export default function PodcastGeneratorPage() {
     setTextInput("")
     setUploadedFiles([])
     setShouldSummarize(false)
-    // Keep model/language selections
     setSelectedFrameworkPoints([])
     setFrameworkDetails({})
     setAdditionalStructurePrompt("")
@@ -621,295 +767,6 @@ export default function PodcastGeneratorPage() {
     setCurrentTask("")
     setIsLoading(false)
     setAudioGenerationProgress(0)
-  }
-
-  // Settings Modal Component
-  const SettingsModal = () => {
-    const { theme, setTheme } = useTheme()
-
-    return (
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="bg-background border-border text-foreground max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-primary flex items-center">
-              <Settings className="w-5 h-5 mr-2" />
-              Settings
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Configure your preferences, API key, and script generation model.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            {/* Theme Section */}
-            <div className="space-y-3">
-              <Label className="text-foreground flex items-center">
-                <Monitor className="w-4 h-4 mr-2 text-primary" /> Theme Preference
-              </Label>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={theme === "light" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme("light")}
-                  className={`flex items-center justify-center ${
-                    theme === "light"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background border-border hover:bg-accent"
-                  }`}
-                >
-                  <Sun className="w-4 h-4 mr-1" />
-                  Light
-                </Button>
-                <Button
-                  variant={theme === "dark" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme("dark")}
-                  className={`flex items-center justify-center ${
-                    theme === "dark"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background border-border hover:bg-accent"
-                  }`}
-                >
-                  <Moon className="w-4 h-4 mr-1" />
-                  Dark
-                </Button>
-                <Button
-                  variant={theme === "system" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme("system")}
-                  className={`flex items-center justify-center ${
-                    theme === "system"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background border-border hover:bg-accent"
-                  }`}
-                >
-                  <Monitor className="w-4 h-4 mr-1" />
-                  Auto
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Choose your preferred theme. Auto follows your system preference.
-              </p>
-            </div>
-
-            {/* API Key Section */}
-            <div className="space-y-3">
-              <Label htmlFor="settingsApiKey" className="text-foreground flex items-center">
-                <KeyRound className="w-4 h-4 mr-2 text-primary" /> OpenAI API Key
-              </Label>
-              {showApiKeyInput || !isApiKeyFromStorage ? (
-                <>
-                  <Input
-                    id="settingsApiKey"
-                    type="password"
-                    value={apiKey}
-                    onChange={handleApiKeyInputChange}
-                    placeholder="Enter your OpenAI API Key"
-                    className="bg-background border-border placeholder:text-muted-foreground text-foreground focus:border-primary"
-                  />
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="settingsSaveApiKey"
-                      checked={saveApiKey}
-                      onCheckedChange={(checked) => setSaveApiKey(Boolean(checked))}
-                      className="border-border data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    />
-                    <Label htmlFor="settingsSaveApiKey" className="text-sm text-muted-foreground font-medium">
-                      Save API Key in browser
-                    </Label>
-                  </div>
-                </>
-              ) : (
-                <div className="p-3 bg-muted/50 rounded-md border border-border space-y-2">
-                  <p className="text-sm text-green-600 dark:text-green-400">
-                    API Key is saved and loaded from browser storage.
-                  </p>
-                  <div className="flex space-x-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowApiKeyInput(true)}
-                      className="text-primary border-border hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <Edit3 className="w-3 h-3 mr-1.5" /> Edit Key
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleClearAndEditApiKey}
-                      className="text-destructive-foreground"
-                    >
-                      <Trash2 className="w-3 h-3 mr-1.5" /> Clear
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Script Model Section */}
-            <div className="space-y-3">
-              <Label htmlFor="settingsScriptModel" className="text-foreground">
-                Script Generation Model
-              </Label>
-              <Select value={scriptModel} onValueChange={setScriptModel}>
-                <SelectTrigger
-                  id="settingsScriptModel"
-                  className="bg-background border-border text-foreground focus:border-primary"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background border-border text-foreground">
-                  {SCRIPT_MODELS.map((m) => (
-                    <SelectItem key={m} value={m} className="hover:bg-accent focus:bg-accent">
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Choose the OpenAI model for generating podcast scripts. More advanced models may produce better results.
-              </p>
-            </div>
-
-            {/* Advanced Settings Toggle */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-foreground flex items-center">
-                  <Settings className="w-4 h-4 mr-2 text-primary" /> Advanced Options
-                </Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                  className="text-primary hover:bg-primary/10"
-                >
-                  {showAdvancedSettings ? "Hide" : "Show"}
-                  <ChevronRight
-                    className={`w-4 h-4 ml-1 transition-transform ${showAdvancedSettings ? "rotate-90" : ""}`}
-                  />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Configure advanced AI parameters and system prompts for fine-tuned control.
-              </p>
-            </div>
-
-            {/* Advanced Settings Content */}
-            {showAdvancedSettings && (
-              <div className="space-y-6 p-4 bg-muted/30 rounded-lg border border-border">
-                {/* System Prompt Template */}
-                <div className="space-y-3">
-                  <Label htmlFor="systemPromptTemplate" className="text-foreground">
-                    System Prompt Template
-                  </Label>
-                  <Select value={systemPromptTemplate} onValueChange={setSystemPromptTemplate}>
-                    <SelectTrigger
-                      id="systemPromptTemplate"
-                      className="bg-background border-border text-foreground focus:border-primary"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-border text-foreground max-h-[200px]">
-                      {SYSTEM_PROMPT_TEMPLATES.map((template) => (
-                        <SelectItem key={template.id} value={template.id} className="hover:bg-accent focus:bg-accent">
-                          <div className="flex flex-col">
-                            <span className="font-medium">{template.name}</span>
-                            <span className="text-xs text-muted-foreground">{template.description}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {SYSTEM_PROMPT_TEMPLATES.find((t) => t.id === systemPromptTemplate)?.description}
-                  </p>
-                </div>
-
-                {/* Custom System Prompt */}
-                {systemPromptTemplate === "custom" && (
-                  <div className="space-y-3">
-                    <Label htmlFor="customSystemPrompt" className="text-foreground">
-                      Custom System Prompt
-                    </Label>
-                    <Textarea
-                      id="customSystemPrompt"
-                      value={customSystemPrompt}
-                      onChange={(e) => setCustomSystemPrompt(e.target.value)}
-                      placeholder="Enter your custom system prompt here..."
-                      rows={4}
-                      className="bg-background border-border placeholder:text-muted-foreground text-foreground focus:border-primary"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Define how the AI should behave and what style it should use for generating podcast scripts.
-                    </p>
-                  </div>
-                )}
-
-                {/* Temperature Control */}
-                <div className="space-y-3">
-                  <Label htmlFor="temperature" className="text-foreground">
-                    Temperature: {temperature}
-                  </Label>
-                  <div className="space-y-2">
-                    <input
-                      type="range"
-                      id="temperature"
-                      min="0"
-                      max="2"
-                      step="0.1"
-                      value={temperature}
-                      onChange={(e) => setTemperature(Number(e.target.value))}
-                      className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer slider"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Conservative (0)</span>
-                      <span>Balanced (1)</span>
-                      <span>Creative (2)</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Controls randomness: lower values for more focused output, higher values for more creative output.
-                  </p>
-                </div>
-
-                {/* Max Tokens */}
-                <div className="space-y-3">
-                  <Label htmlFor="maxTokens" className="text-foreground">
-                    Max Tokens
-                  </Label>
-                  <Input
-                    id="maxTokens"
-                    type="number"
-                    min="100"
-                    max="4000"
-                    step="100"
-                    value={maxTokens}
-                    onChange={(e) => setMaxTokens(Number(e.target.value))}
-                    className="bg-background border-border text-foreground focus:border-primary"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum number of tokens for script generation (100-4000). Higher values allow longer scripts.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end pt-4">
-              <Button
-                onClick={() => {
-                  ensureApiKeySaved()
-                  setSettingsOpen(false)
-                }}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                Save Settings
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    )
   }
 
   // Drag and Drop Upload Component
@@ -1448,9 +1305,16 @@ export default function PodcastGeneratorPage() {
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 p-4 sm:p-6 lg:p-8 flex flex-col items-center text-foreground relative">
       {/* SEO Header Section */}
       <header className="w-full max-w-4xl text-center mb-8">
-        <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70 mb-4">
-          AutoCast
-        </h1>
+        <div className="flex justify-center items-center mb-4">
+          <Image
+            src="/Auto Cast-Logo.png"
+            alt="AutoCast Logo"
+            width={200}
+            height={80}
+            className="h-16 w-auto"
+            priority
+          />
+        </div>
         <p className="text-xl text-muted-foreground mb-6 max-w-2xl mx-auto">
           Transform your written content into professional podcast scripts and high-quality audio using advanced AI
           technology. Support for multiple languages with natural-sounding voices.
@@ -1466,7 +1330,14 @@ export default function PodcastGeneratorPage() {
       <Card className="w-full max-w-4xl bg-card/70 backdrop-blur-sm border-border text-foreground shadow-2xl">
         <CardHeader>
           <div className="flex justify-center items-center flex-1">
-            <Mic className="w-10 h-10 text-primary" />
+            <Image
+              src="/Auto Cast-Icon.png"
+              alt="AutoCast Icon"
+              width={40}
+              height={40}
+              className="w-10 h-10"
+              priority
+            />
           </div>
           <CardTitle className="text-2xl text-center font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
             AutoCast
@@ -1510,15 +1381,99 @@ export default function PodcastGeneratorPage() {
       </Button>
 
       {/* Settings Modal */}
-      <SettingsModal />
+      <SettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        apiKey={apiKey}
+        onApiKeyChange={handleApiKeyInputChange}
+        saveApiKey={saveApiKey}
+        onSaveApiKeyChange={setSaveApiKey}
+        isApiKeyFromStorage={isApiKeyFromStorage}
+        showApiKeyInput={showApiKeyInput}
+        onShowApiKeyInputChange={setShowApiKeyInput}
+        onClearAndEditApiKey={handleClearAndEditApiKey}
+        selectedEndpoint={selectedEndpoint}
+        onEndpointChange={handleEndpointChange}
+        customEndpointUrl={customEndpointUrl}
+        onCustomEndpointChange={handleCustomEndpointChange}
+        onSaveCustomEndpoint={saveCustomEndpoint}
+        onTestEndpointConnection={testEndpointConnection}
+        isTestingEndpoint={isTestingEndpoint}
+        endpointStatus={endpointStatus}
+        endpointStatusMessage={endpointStatusMessage}
+        scriptModel={scriptModel}
+        onScriptModelChange={setScriptModel}
+        showAdvancedSettings={showAdvancedSettings}
+        onShowAdvancedSettingsChange={setShowAdvancedSettings}
+        temperature={temperature}
+        onTemperatureChange={setTemperature}
+        maxTokens={maxTokens}
+        onMaxTokensChange={setMaxTokens}
+        systemPromptTemplate={systemPromptTemplate}
+        onSystemPromptTemplateChange={setSystemPromptTemplate}
+        customSystemPrompt={customSystemPrompt}
+        onCustomSystemPromptChange={setCustomSystemPrompt}
+        onSaveSettings={() => {
+          ensureApiKeySaved()
+          setSettingsOpen(false)
+        }}
+      />
 
-      <footer className="mt-8 text-center text-muted-foreground text-sm max-w-4xl">
-        <p className="mb-2">
-          <strong>AutoCast</strong> - Powered by Vercel AI and OpenAI. Transform any text into engaging podcasts.
-        </p>
-        <p className="text-xs">
-          Your API keys and content are stored locally in your browser. We prioritize your privacy and data security.
-        </p>
+      <footer className="mt-8 text-center text-muted-foreground text-sm max-w-4xl space-y-4">
+        <div className="space-y-2">
+          <p className="mb-2">
+            <strong>AutoCast</strong> - Powered by Vercel AI and OpenAI. Transform any text into engaging podcasts.
+          </p>
+          <p className="text-xs">
+            Your API keys and content are stored locally in your browser. We prioritize your privacy and data security.
+          </p>
+        </div>
+
+        {/* Related Tools Section */}
+        <div className="p-4 bg-muted/30 rounded-lg border border-border">
+          <h3 className="text-sm font-semibold text-foreground mb-2">Related Tools</h3>
+          <div className="text-left">
+            <a
+              href="https://subtitile-flow.moaminsharifi.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary/80 underline font-medium"
+            >
+              Subtitle Flow
+            </a>
+            <p className="text-xs text-muted-foreground mt-1">
+              Your go-to, privacy-focused subtitle editor. This browser-based tool lets you upload media and work with
+              SRT/VTT files directly in your browser – no backend needed! Enjoy blazing speed, full privacy, and
+              optional AI transcription to generate subtitles effortlessly.
+            </p>
+          </div>
+        </div>
+
+        {/* Creator and Links Section */}
+        <div className="space-y-2 pt-2 border-t border-border">
+          <p className="text-xs">
+            Created by{" "}
+            <a
+              href="https://moaminsharifi.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary/80 underline font-medium"
+            >
+              Amin Sharifi
+            </a>
+          </p>
+          <p className="text-xs">
+            <a
+              href="https://github.com/moaminsharifi/auto-cast"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary/80 underline"
+            >
+              View Source Code on GitHub
+            </a>
+          </p>
+        </div>
+
         <div className="mt-4 flex flex-wrap justify-center gap-4 text-xs">
           <span>✨ AI-Powered Script Generation</span>
           <span>🎙️ Professional Voice Synthesis</span>
