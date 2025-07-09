@@ -17,8 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { Loader2, CheckCircle, AlertCircle } from "lucide-react"
+import { Loader2, CheckCircle, AlertCircle, Sun, Moon, Monitor } from "lucide-react"
 
 interface SettingsModalProps {
   open: boolean
@@ -53,6 +52,8 @@ interface SettingsModalProps {
   customSystemPrompt: string
   onCustomSystemPromptChange: (prompt: string) => void
   onSaveSettings: () => void
+  pendingTheme: string
+  onThemeChange: (theme: string) => void
 }
 
 export function SettingsModal({
@@ -88,6 +89,8 @@ export function SettingsModal({
   customSystemPrompt,
   onCustomSystemPromptChange,
   onSaveSettings,
+  pendingTheme,
+  onThemeChange,
 }: SettingsModalProps) {
   const handleApiKeyChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,47 +99,124 @@ export function SettingsModal({
     [onApiKeyChange],
   )
 
+  const getThemeIcon = (themeValue: string) => {
+    switch (themeValue) {
+      case "light":
+        return <Sun className="w-4 h-4" />
+      case "dark":
+        return <Moon className="w-4 h-4" />
+      case "system":
+        return <Monitor className="w-4 h-4" />
+      default:
+        return <Monitor className="w-4 h-4" />
+    }
+  }
+
+  const getThemeLabel = (themeValue: string) => {
+    switch (themeValue) {
+      case "light":
+        return "Light"
+      case "dark":
+        return "Dark"
+      case "system":
+        return "System"
+      default:
+        return "System"
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] bg-background border-border text-foreground">
+      <DialogContent className="sm:max-w-[500px] bg-background border-border text-foreground max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>Configure AutoCast settings.</DialogDescription>
+          <DialogDescription>Configure AutoCast settings and preferences.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div>
-            <Label htmlFor="apiKey">OpenAI API Key</Label>
+        <div className="grid gap-6 py-4">
+          {/* Theme Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="theme" className="text-sm font-medium">
+              Theme
+            </Label>
+            <Select value={pendingTheme || "system"} onValueChange={onThemeChange}>
+              <SelectTrigger id="theme" className="bg-background border-border text-foreground focus:border-primary">
+                {/* Removed getThemeIcon here, SelectValue will render the icon from the selected item */}
+                <SelectValue placeholder="Select theme" />
+              </SelectTrigger>
+              <SelectContent className="bg-background border-border text-foreground">
+                <SelectItem value="light" className="hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center gap-2">
+                    <Sun className="w-4 h-4" />
+                    <span>Light</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="dark" className="hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center gap-2">
+                    <Moon className="w-4 h-4" />
+                    <span>Dark</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="system" className="hover:bg-accent focus:bg-accent">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="w-4 h-4" />
+                    <span>System</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Choose your preferred theme. System will match your device's theme.
+            </p>
+          </div>
+
+          {/* API Key Section */}
+          <div className="space-y-2">
+            <Label htmlFor="apiKey" className="text-sm font-medium">
+              OpenAI API Key
+            </Label>
             {showApiKeyInput ? (
-              <div className="flex items-center space-x-2">
+              <div className="space-y-2">
                 <Input
                   id="apiKey"
                   value={apiKey}
                   onChange={handleApiKeyChange}
                   type="password"
+                  placeholder="sk-..."
                   className="bg-background border-border text-foreground focus:border-primary"
                 />
-                <Checkbox
-                  id="saveApiKey"
-                  checked={saveApiKey}
-                  onCheckedChange={onSaveApiKeyChange}
-                  className="border-border data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                />
-                <Label htmlFor="saveApiKey" className="text-sm text-muted-foreground">
-                  Save
-                </Label>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="saveApiKey"
+                    checked={saveApiKey}
+                    onCheckedChange={onSaveApiKeyChange}
+                    className="border-border data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                  />
+                  <Label htmlFor="saveApiKey" className="text-sm text-muted-foreground">
+                    Save API key locally in browser
+                  </Label>
+                </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">API Key Stored</p>
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md border border-border">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <span className="text-sm text-foreground">API Key Stored</span>
+                </div>
                 <Button variant="outline" size="sm" onClick={onClearAndEditApiKey}>
                   Edit
                 </Button>
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Your API key is stored locally and never sent to our servers.
+            </p>
           </div>
 
-          <div>
-            <Label htmlFor="endpoint">API Endpoint</Label>
+          {/* API Endpoint Section */}
+          <div className="space-y-2">
+            <Label htmlFor="endpoint" className="text-sm font-medium">
+              API Endpoint
+            </Label>
             <Select value={selectedEndpoint.id} onValueChange={onEndpointChange}>
               <SelectTrigger id="endpoint" className="bg-background border-border text-foreground focus:border-primary">
                 <SelectValue />
@@ -163,7 +243,7 @@ export function SettingsModal({
               </SelectContent>
             </Select>
             {selectedEndpoint.id === "custom" && (
-              <div className="mt-2 space-y-2">
+              <div className="mt-3 space-y-3">
                 <Input
                   type="url"
                   placeholder="https://your-custom-endpoint.com/v1"
@@ -194,8 +274,8 @@ export function SettingsModal({
                   <div
                     className={`flex items-center space-x-2 p-3 rounded-md text-sm ${
                       endpointStatus === "success"
-                        ? "bg-green-500/10 text-green-500 border border-green-200"
-                        : "bg-red-500/10 text-red-500 border border-red-200"
+                        ? "bg-green-500/10 text-green-500 border border-green-200 dark:border-green-800"
+                        : "bg-red-500/10 text-red-500 border border-red-200 dark:border-red-800"
                     }`}
                   >
                     {endpointStatus === "success" ? (
@@ -208,10 +288,16 @@ export function SettingsModal({
                 )}
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Choose your preferred AI service provider or use a custom endpoint.
+            </p>
           </div>
 
-          <div>
-            <Label htmlFor="scriptModel">Script Model</Label>
+          {/* Script Model Section */}
+          <div className="space-y-2">
+            <Label htmlFor="scriptModel" className="text-sm font-medium">
+              Script Generation Model
+            </Label>
             <Select value={scriptModel} onValueChange={onScriptModelChange}>
               <SelectTrigger
                 id="scriptModel"
@@ -221,24 +307,43 @@ export function SettingsModal({
               </SelectTrigger>
               <SelectContent className="bg-background border-border text-foreground">
                 <SelectItem value="gpt-4o-mini" className="hover:bg-accent focus:bg-accent">
-                  GPT-4o Mini
+                  <div className="flex flex-col items-start">
+                    <span>GPT-4o Mini</span>
+                    <span className="text-xs text-muted-foreground">Fast and cost-effective</span>
+                  </div>
                 </SelectItem>
                 <SelectItem value="gpt-3.5-turbo" className="hover:bg-accent focus:bg-accent">
-                  GPT-3.5 Turbo
+                  <div className="flex flex-col items-start">
+                    <span>GPT-3.5 Turbo</span>
+                    <span className="text-xs text-muted-foreground">Balanced performance</span>
+                  </div>
                 </SelectItem>
                 <SelectItem value="gpt-4o" className="hover:bg-accent focus:bg-accent">
-                  GPT-4o
+                  <div className="flex flex-col items-start">
+                    <span>GPT-4o</span>
+                    <span className="text-xs text-muted-foreground">High quality output</span>
+                  </div>
                 </SelectItem>
                 <SelectItem value="gpt-4-turbo-preview" className="hover:bg-accent focus:bg-accent">
-                  GPT-4 Turbo Preview
+                  <div className="flex flex-col items-start">
+                    <span>GPT-4 Turbo Preview</span>
+                    <span className="text-xs text-muted-foreground">Latest capabilities</span>
+                  </div>
                 </SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              Select the AI model for generating podcast scripts. Higher-tier models provide better quality but cost
+              more.
+            </p>
           </div>
 
-          <div>
+          {/* Advanced Settings Section */}
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label htmlFor="advancedSettings">Advanced Settings</Label>
+              <Label htmlFor="advancedSettings" className="text-sm font-medium">
+                Advanced Settings
+              </Label>
               <Checkbox
                 id="advancedSettings"
                 checked={showAdvancedSettings}
@@ -247,9 +352,11 @@ export function SettingsModal({
               />
             </div>
             {showAdvancedSettings && (
-              <div className="mt-2 space-y-2">
-                <div>
-                  <Label htmlFor="temperature">Temperature</Label>
+              <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
+                <div className="space-y-2">
+                  <Label htmlFor="temperature" className="text-sm font-medium">
+                    Temperature ({temperature})
+                  </Label>
                   <Input
                     id="temperature"
                     type="number"
@@ -260,19 +367,32 @@ export function SettingsModal({
                     onChange={(e) => onTemperatureChange(Number.parseFloat(e.target.value))}
                     className="bg-background border-border text-foreground focus:border-primary"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Controls randomness. Lower values (0.1-0.3) for focused content, higher (0.7-0.9) for creative
+                    content.
+                  </p>
                 </div>
-                <div>
-                  <Label htmlFor="maxTokens">Max Tokens</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="maxTokens" className="text-sm font-medium">
+                    Max Tokens
+                  </Label>
                   <Input
                     id="maxTokens"
                     type="number"
+                    min="100"
+                    max="4000"
                     value={maxTokens}
                     onChange={(e) => onMaxTokensChange(Number.parseInt(e.target.value))}
                     className="bg-background border-border text-foreground focus:border-primary"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum length of generated content. Higher values allow longer scripts but cost more.
+                  </p>
                 </div>
-                <div>
-                  <Label htmlFor="systemPromptTemplate">System Prompt Template</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="systemPromptTemplate" className="text-sm font-medium">
+                    System Prompt Template
+                  </Label>
                   <Select value={systemPromptTemplate} onValueChange={onSystemPromptTemplateChange}>
                     <SelectTrigger
                       id="systemPromptTemplate"
@@ -282,46 +402,73 @@ export function SettingsModal({
                     </SelectTrigger>
                     <SelectContent className="bg-background border-border text-foreground">
                       <SelectItem value="default" className="hover:bg-accent focus:bg-accent">
-                        Default
+                        <div className="flex flex-col items-start">
+                          <span>Default</span>
+                          <span className="text-xs text-muted-foreground">Balanced approach</span>
+                        </div>
                       </SelectItem>
                       <SelectItem value="educational" className="hover:bg-accent focus:bg-accent">
-                        Educational
+                        <div className="flex flex-col items-start">
+                          <span>Educational</span>
+                          <span className="text-xs text-muted-foreground">Clear explanations</span>
+                        </div>
                       </SelectItem>
                       <SelectItem value="storytelling" className="hover:bg-accent focus:bg-accent">
-                        Storytelling
+                        <div className="flex flex-col items-start">
+                          <span>Storytelling</span>
+                          <span className="text-xs text-muted-foreground">Narrative-driven</span>
+                        </div>
                       </SelectItem>
                       <SelectItem value="conversational" className="hover:bg-accent focus:bg-accent">
-                        Conversational
+                        <div className="flex flex-col items-start">
+                          <span>Conversational</span>
+                          <span className="text-xs text-muted-foreground">Casual and friendly</span>
+                        </div>
                       </SelectItem>
                       <SelectItem value="professional" className="hover:bg-accent focus:bg-accent">
-                        Professional
+                        <div className="flex flex-col items-start">
+                          <span>Professional</span>
+                          <span className="text-xs text-muted-foreground">Business-focused</span>
+                        </div>
                       </SelectItem>
                       <SelectItem value="custom" className="hover:bg-accent focus:bg-accent">
-                        Custom
+                        <div className="flex flex-col items-start">
+                          <span>Custom</span>
+                          <span className="text-xs text-muted-foreground">Define your own</span>
+                        </div>
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Choose the style and approach for your podcast scripts.
+                  </p>
                 </div>
                 {systemPromptTemplate === "custom" && (
-                  <div>
-                    <Label htmlFor="customSystemPrompt">Custom System Prompt</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="customSystemPrompt" className="text-sm font-medium">
+                      Custom System Prompt
+                    </Label>
                     <Textarea
                       id="customSystemPrompt"
                       value={customSystemPrompt}
                       onChange={(e) => onCustomSystemPromptChange(e.target.value)}
-                      placeholder="You are a helpful assistant."
-                      className="bg-background border-border text-foreground focus:border-primary"
+                      placeholder="You are a helpful assistant that creates engaging podcast scripts..."
+                      rows={4}
+                      className="bg-background border-border text-foreground focus:border-primary resize-none"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Define how the AI should behave when generating your podcast scripts.
+                    </p>
                   </div>
                 )}
               </div>
             )}
           </div>
         </div>
-        <DialogFooter>
-          <ThemeToggle />
+        <DialogFooter className="flex justify-between items-center">
+          <div className="text-xs text-muted-foreground">Settings are saved automatically</div>
           <Button type="submit" onClick={onSaveSettings}>
-            Save changes
+            Save Changes
           </Button>
         </DialogFooter>
       </DialogContent>

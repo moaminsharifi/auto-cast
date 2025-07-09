@@ -38,21 +38,21 @@ To get a local copy up and running, follow these simple steps.
 ### Installation
 
 1.  **Clone the repository:**
-    ```sh
+    \`\`\`sh
     git clone https://github.com/moaminsharifi/auto-cast.git
     cd auto-cast
-    ```
+    \`\`\`
 
 2.  **Install dependencies:**
-    ```sh
+    \`\`\`sh
     pnpm install
-    ```
+    \`\`\`
 
 
 3.  **Run the development server:**
-    ```sh
+    \`\`\`sh
     pnpm dev
-    ```
+    \`\`\`
 
     Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
@@ -73,5 +73,3 @@ If you have a suggestion that would make this better, please fork the repo and c
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
-
